@@ -37,7 +37,7 @@ class Foreman::Engine
           name_to_stop = name.split("_stop").first
           if @order.include? name_to_stop
             @stop_commands[name_to_stop] = command
-            return hash
+            next hash
           end
         end
         
@@ -144,7 +144,7 @@ private ######################################################################
         stop_command.sub! "$PID", pid.to_s
         info "stopping #{process.name} with command: #{stop_command}"
         Kernel.system stop_command
-        running_processes[pid] = nil
+        running_processes.delete pid
       end
     end
   end
@@ -244,13 +244,13 @@ private ######################################################################
   end
 
   def terminate_gracefully
-    info "stopping all processes with stop commands"
+    info "stopping all processes with stop commands" unless running_processes.empty?
     stop_all
-    info "sending SIGTERM to all remaining processes"
+    info "sending SIGTERM to all remaining processes" unless running_processes.empty?
     kill_all "SIGTERM"
     Timeout.timeout(3) { Process.waitall }
   rescue Timeout::Error
-    info "sending SIGKILL to all remaining processes"
+    info "sending SIGKILL to all remaining processes" unless running_processes.empty?
     kill_all "SIGKILL"
   end
 
