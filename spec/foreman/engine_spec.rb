@@ -86,4 +86,23 @@ describe "Foreman::Engine" do
       subject.execute("bravo")
     end
   end
+  
+  describe "stop" do
+    before { write_procfile_with_stop }
+    
+    it "should stop applicable processes" do
+      mock(process = Object.new).name.times(2).returns "charlie"
+      pid_to_proc = { 123 => process }
+      mock(subject).running_processes.times(2).returns(pid_to_proc)
+      
+      # suppress output
+      stub(subject).info
+      
+      # expect stop command
+      mock(Kernel).system("./charlie_stop 123")
+      
+      subject.processes
+      subject.__send__ :stop_all
+    end
+  end
 end

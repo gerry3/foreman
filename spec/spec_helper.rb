@@ -32,6 +32,14 @@ def write_procfile(procfile="Procfile")
   File.expand_path(procfile)
 end
 
+def write_procfile_with_stop(procfile="Procfile")
+  File.open(procfile, "w") do |file|
+    file.puts "charlie: ./charlie"
+    file.puts "charlie_stop: ./charlie_stop $PID"
+  end
+  File.expand_path(procfile)
+end
+
 def load_export_templates_into_fakefs(type)
   FakeFS.deactivate!
   files = Dir[File.expand_path("../../data/export/#{type}/**", __FILE__)].inject({}) do |hash, file|

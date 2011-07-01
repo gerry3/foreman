@@ -24,6 +24,7 @@ class Foreman::Engine
   def processes
     @processes ||= begin
       @order = []
+      @stop_commands = {}
       procfile.split("\n").inject({}) do |hash, line|
         next if line.strip == ""
         name, command = line.split(/ *: +/, 2)
@@ -31,6 +32,15 @@ class Foreman::Engine
           warn_deprecated_procfile!
           name, command = line.split(/ +/, 2)
         end
+        
+        if name.include? "_stop"
+          name_to_stop = name.split("_stop").first
+          if @order.include? name_to_stop
+            @stop_commands[name_to_stop] = command
+            return hash
+          end
+        end
+        
         process = Foreman::Process.new(name, command)
         process.color = next_color
         @order << process.name
@@ -123,6 +133,18 @@ private ######################################################################
       begin
         info "process exiting", process
       rescue Interrupt
+      end
+    end
+  end
+
+  def stop_all
+    running_processes.each do |pid, process|
+      stop_command = @stop_commands[process.name]
+      unless stop_command.nil?
+        stop_command.sub! "$PID", pid.to_s
+        info "stopping #{process.name} with command: #{stop_command}"
+        Kernel.system stop_command
+        running_processes[pid] = nil
       end
     end
   end
@@ -222,11 +244,13 @@ private ######################################################################
   end
 
   def terminate_gracefully
-    info "sending SIGTERM to all processes"
+    info "stopping all processes with stop commands"
+    stop_all
+    info "sending SIGTERM to all remaining processes"
     kill_all "SIGTERM"
     Timeout.timeout(3) { Process.waitall }
   rescue Timeout::Error
-    info "sending SIGKILL to all processes"
+    info "sending SIGKILL to all remaining processes"
     kill_all "SIGKILL"
   end
 
