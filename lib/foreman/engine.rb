@@ -123,7 +123,14 @@ private ######################################################################
     begin
       Dir.chdir directory do
         PTY.spawn(runner, process.command) do |stdin, stdout, pid|
-          trap("SIGTERM") { Process.kill("SIGTERM", pid) }
+          trap("SIGTERM") do
+            stop_command = @stop_commands[process.name]
+            unless stop_command.nil?
+              stop_command.sub! "$PID", pid.to_s
+              info "stopping #{process.name} with command: #{stop_command}"
+              Kernel.system stop_command
+            end
+          end
           until stdin.eof?
             info stdin.gets, process
           end
@@ -136,19 +143,7 @@ private ######################################################################
       end
     end
   end
-
-  def stop_all
-    running_processes.each do |pid, process|
-      stop_command = @stop_commands[process.name]
-      unless stop_command.nil?
-        stop_command.sub! "$PID", pid.to_s
-        info "stopping #{process.name} with command: #{stop_command}"
-        Kernel.system stop_command
-        running_processes.delete pid
-      end
-    end
-  end
-
+  
   def kill_all(signal="SIGTERM")
     running_processes.each do |pid, process|
       Process.kill(signal, pid) rescue Errno::ESRCH
@@ -244,13 +239,11 @@ private ######################################################################
   end
 
   def terminate_gracefully
-    info "stopping all processes with stop commands" unless running_processes.empty?
-    stop_all
-    info "sending SIGTERM to all remaining processes" unless running_processes.empty?
+    info "sending SIGTERM to all foreman parent processes" unless running_processes.empty?
     kill_all "SIGTERM"
     Timeout.timeout(3) { Process.waitall }
   rescue Timeout::Error
-    info "sending SIGKILL to all remaining processes" unless running_processes.empty?
+    info "sending SIGKILL to all remaining foreman parent processes" unless running_processes.empty?
     kill_all "SIGKILL"
   end
 
